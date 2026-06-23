@@ -47,6 +47,8 @@ async function lockGroups(
 ): Promise<number> {
   out.clear();
 
+  const originalGroup = vscode.window.tabGroups.activeTabGroup;
+
   // Snapshot once so indexOf is consistent across the loop even if the live
   // tabGroups.all reference updates mid-run.
   const allGroups = vscode.window.tabGroups.all;
@@ -113,6 +115,17 @@ async function lockGroups(
   if (locked < groups.length) {
     out.appendLine(`locked ${locked.toString()} of ${groups.length.toString()} — see above for skipped groups`);
     out.show(true);
+  }
+
+  // Restore focus to the originally active group.
+  const originalInput = originalGroup.activeTab?.input;
+  if (originalInput instanceof vscode.TabInputText) {
+    try {
+      await vscode.window.showTextDocument(originalInput.uri, {
+        viewColumn: originalGroup.viewColumn,
+        preserveFocus: false,
+      });
+    } catch { /* ignore */ }
   }
 
   return locked;
