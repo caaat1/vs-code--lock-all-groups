@@ -1,44 +1,47 @@
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 
 // Make a group active using its viewColumn, which works correctly in grid
 // layouts. Each branch uses the most direct API for the tab's content type.
-// Returns a cleanup function when a temporary document was opened so the
-// caller can close it after locking.
-async function makeGroupActive(group: vscode.TabGroup): Promise<(() => Promise<void>) | undefined> {
+async function makeGroupActive(group: vscode.TabGroup): Promise<void> {
   const input = group.activeTab?.input;
   const col = group.viewColumn;
 
   if (input instanceof vscode.TabInputText) {
-    await vscode.window.showTextDocument(input.uri, { viewColumn: col, preserveFocus: false });
-    return undefined;
+    await vscode.window.showTextDocument(input.uri, {
+      viewColumn: col,
+      preserveFocus: false,
+    });
+    return;
   }
   if (input instanceof vscode.TabInputTextDiff) {
-    await vscode.commands.executeCommand('vscode.diff', input.original, input.modified, undefined, { viewColumn: col });
-    return undefined;
+    await vscode.commands.executeCommand(
+      "vscode.diff",
+      input.original,
+      input.modified,
+      undefined,
+      { viewColumn: col },
+    );
+    return;
   }
   if (input instanceof vscode.TabInputNotebook) {
-    await vscode.commands.executeCommand('vscode.openWith', input.uri, input.notebookType, { viewColumn: col });
-    return undefined;
+    await vscode.commands.executeCommand(
+      "vscode.openWith",
+      input.uri,
+      input.notebookType,
+      { viewColumn: col },
+    );
+    return;
   }
   if (input instanceof vscode.TabInputCustom) {
-    await vscode.commands.executeCommand('vscode.openWith', input.uri, input.viewType, { viewColumn: col });
-    return undefined;
+    await vscode.commands.executeCommand(
+      "vscode.openWith",
+      input.uri,
+      input.viewType,
+      { viewColumn: col },
+    );
+    return;
   }
-
-  // Empty group or unsupported tab type: open a throwaway untitled document
-  // to activate the group, verify we landed in the right place, then return
-  // a cleanup that closes it after locking.
-  const doc = await vscode.workspace.openTextDocument({ content: '' });
-  await vscode.window.showTextDocument(doc, { viewColumn: col, preserveFocus: false, preview: true });
-
-  if (vscode.window.tabGroups.activeTabGroup.viewColumn !== col) {
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-    throw new Error(`showTextDocument landed on col ${vscode.window.tabGroups.activeTabGroup.viewColumn.toString()}, expected ${col.toString()}`);
-  }
-
-  return async (): Promise<void> => {
-    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-  };
+  throw new Error("unsupported tab type");
 }
 
 async function lockGroups(
@@ -63,30 +66,40 @@ async function lockGroups(
     // (possibly filtered) groups parameter.
     const fullIndex = allGroups.indexOf(group);
     let focused = false;
-    let cleanup: (() => Promise<void>) | undefined;
 
     try {
-      cleanup = await makeGroupActive(group);
+      await makeGroupActive(group);
       focused = true;
     } catch (e) {
       out.appendLine(`[${i}] col ${group.viewColumn.toString()}: ${String(e)}`);
 
       // Fallback 1: viewColumn-based
       try {
-        await vscode.commands.executeCommand('workbench.action.focusEditorGroup', { viewColumn: group.viewColumn });
+        await vscode.commands.executeCommand(
+          "workbench.action.focusEditorGroup",
+          { viewColumn: group.viewColumn },
+        );
         focused = true;
-      } catch { /* silent */ }
+      } catch {
+        /* silent */
+      }
 
       // Fallback 2: step forward from last known position (O(1) when the
       // previous full-list group was just processed) or cycle from group 0.
       if (!focused && fullIndex >= 0) {
         try {
           if (fullIndex > 0 && lastFullIndex === fullIndex - 1) {
-            await vscode.commands.executeCommand('workbench.action.focusNextGroup');
+            await vscode.commands.executeCommand(
+              "workbench.action.focusNextGroup",
+            );
           } else {
-            await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
+            await vscode.commands.executeCommand(
+              "workbench.action.focusFirstEditorGroup",
+            );
             for (let step = 0; step < fullIndex; step++) {
-              await vscode.commands.executeCommand('workbench.action.focusNextGroup');
+              await vscode.commands.executeCommand(
+                "workbench.action.focusNextGroup",
+              );
             }
           }
           focused = true;
@@ -99,21 +112,19 @@ async function lockGroups(
     if (!focused) continue;
 
     try {
-      await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
+      await vscode.commands.executeCommand("workbench.action.lockEditorGroup");
       locked++;
     } catch (e) {
       out.appendLine(`[${i}] lock failed: ${String(e)}`);
     }
 
     lastFullIndex = fullIndex;
-
-    if (cleanup !== undefined) {
-      try { await cleanup(); } catch { /* ignore */ }
-    }
   }
 
   if (locked < groups.length) {
-    out.appendLine(`locked ${locked.toString()} of ${groups.length.toString()} — see above for skipped groups`);
+    out.appendLine(
+      `locked ${locked.toString()} of ${groups.length.toString()} — see above for skipped groups`,
+    );
     out.show(true);
   }
 
@@ -125,21 +136,26 @@ async function lockGroups(
         viewColumn: originalGroup.viewColumn,
         preserveFocus: false,
       });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   return locked;
 }
 
 export function activate(context: vscode.ExtensionContext): void {
-  const out = vscode.window.createOutputChannel('Lock All Groups');
+  const out = vscode.window.createOutputChannel("Lock All Groups");
   context.subscriptions.push(
     out,
-    vscode.commands.registerCommand('lockAllGroups.lockAll', () =>
+    vscode.commands.registerCommand("lockAllGroups.lockAll", () =>
       lockGroups(vscode.window.tabGroups.all, out),
     ),
-    vscode.commands.registerCommand('lockAllGroups.lockOccupied', () =>
-      lockGroups(vscode.window.tabGroups.all.filter(g => g.tabs.length > 0), out),
+    vscode.commands.registerCommand("lockAllGroups.lockOccupied", () =>
+      lockGroups(
+        vscode.window.tabGroups.all.filter((g) => g.tabs.length > 0),
+        out,
+      ),
     ),
   );
 }
