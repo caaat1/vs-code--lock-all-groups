@@ -61,6 +61,8 @@ async function lockGroups(
   out.clear();
 
   let locked = 0;
+  let lastFocusedIndex = -1;
+
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i];
     let focused = false;
@@ -86,13 +88,17 @@ async function lockGroups(
           focused = true;
         } catch { /* silent */ }
       }
-      // Fallback 3: cycle from the first group via focusNextGroup — works for
-      // any position including empty groups at high column numbers.
+      // Fallback 3: step forward from the last known position (O(1) when the
+      // previous group was just processed) or cycle from group 0 as a last resort.
       if (!focused) {
         try {
-          await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
-          for (let step = 0; step < i; step++) {
+          if (lastFocusedIndex === i - 1) {
             await vscode.commands.executeCommand('workbench.action.focusNextGroup');
+          } else {
+            await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
+            for (let step = 0; step < i; step++) {
+              await vscode.commands.executeCommand('workbench.action.focusNextGroup');
+            }
           }
           focused = true;
         } catch (e2) {
@@ -109,6 +115,8 @@ async function lockGroups(
     } catch (e) {
       out.appendLine(`[${i}] lock failed: ${String(e)}`);
     }
+
+    lastFocusedIndex = i;
 
     if (cleanup !== undefined) {
       try { await cleanup(); } catch { /* ignore */ }
