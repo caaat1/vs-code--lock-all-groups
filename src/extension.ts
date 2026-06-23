@@ -1,18 +1,5 @@
 import * as vscode from 'vscode';
 
-// Named focus commands keyed by position in tabGroups.all (0-based). Limited
-// to 8 and navigate by grid column, so used only as a fallback.
-const FOCUS_CMDS = [
-  'workbench.action.focusFirstEditorGroup',
-  'workbench.action.focusSecondEditorGroup',
-  'workbench.action.focusThirdEditorGroup',
-  'workbench.action.focusFourthEditorGroup',
-  'workbench.action.focusFifthEditorGroup',
-  'workbench.action.focusSixthEditorGroup',
-  'workbench.action.focusSeventhEditorGroup',
-  'workbench.action.focusEighthEditorGroup',
-];
-
 // Make a group active using its viewColumn, which works correctly in grid
 // layouts. Each branch uses the most direct API for the tab's content type.
 // Returns a cleanup function when a temporary document was opened so the
@@ -82,21 +69,13 @@ async function lockGroups(
     } catch (e) {
       out.appendLine(`[${i}] col ${group.viewColumn.toString()}: ${String(e)}`);
 
-      // Fallback 1: named focus command by full position (positions 0–7)
-      if (fullIndex >= 0 && fullIndex < FOCUS_CMDS.length) {
-        try {
-          await vscode.commands.executeCommand(FOCUS_CMDS[fullIndex]);
-          focused = true;
-        } catch { /* silent */ }
-      }
-      // Fallback 2: viewColumn-based
-      if (!focused) {
-        try {
-          await vscode.commands.executeCommand('workbench.action.focusEditorGroup', { viewColumn: group.viewColumn });
-          focused = true;
-        } catch { /* silent */ }
-      }
-      // Fallback 3: step forward from last known position (O(1) when the
+      // Fallback 1: viewColumn-based
+      try {
+        await vscode.commands.executeCommand('workbench.action.focusEditorGroup', { viewColumn: group.viewColumn });
+        focused = true;
+      } catch { /* silent */ }
+
+      // Fallback 2: step forward from last known position (O(1) when the
       // previous full-list group was just processed) or cycle from group 0.
       if (!focused && fullIndex >= 0) {
         try {
