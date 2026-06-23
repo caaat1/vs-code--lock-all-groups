@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
-// Column-index focus commands are a last resort: they navigate by column only
-// and miss groups stacked vertically in the same grid column.
+// Named focus commands keyed by position in tabGroups.all (0-based). Limited
+// to 8 and navigate by grid column, so used only as a fallback.
 const FOCUS_CMDS = [
   'workbench.action.focusFirstEditorGroup',
   'workbench.action.focusSecondEditorGroup',
@@ -60,11 +60,19 @@ async function lockGroups(
 ): Promise<number> {
   out.clear();
 
+  // Snapshot once so indexOf is consistent across the loop even if the live
+  // tabGroups.all reference updates mid-run.
+  const allGroups = vscode.window.tabGroups.all;
+
   let locked = 0;
-  let lastFocusedIndex = -1;
+  let lastFullIndex = -1;
 
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i];
+    // fullIndex is the position in the complete group list, which is what the
+    // focus commands and cycling logic need — i is just the position in the
+    // (possibly filtered) groups parameter.
+    const fullIndex = allGroups.indexOf(group);
     let focused = false;
     let cleanup: (() => Promise<void>) | undefined;
 
@@ -74,10 +82,10 @@ async function lockGroups(
     } catch (e) {
       out.appendLine(`[${i}] col ${group.viewColumn.toString()}: ${String(e)}`);
 
-      // Fallback 1: named index commands (positions 0–7)
-      if (i < FOCUS_CMDS.length) {
+      // Fallback 1: named focus command by full position (positions 0–7)
+      if (fullIndex >= 0 && fullIndex < FOCUS_CMDS.length) {
         try {
-          await vscode.commands.executeCommand(FOCUS_CMDS[i]);
+          await vscode.commands.executeCommand(FOCUS_CMDS[fullIndex]);
           focused = true;
         } catch { /* silent */ }
       }
@@ -88,15 +96,15 @@ async function lockGroups(
           focused = true;
         } catch { /* silent */ }
       }
-      // Fallback 3: step forward from the last known position (O(1) when the
-      // previous group was just processed) or cycle from group 0 as a last resort.
-      if (!focused) {
+      // Fallback 3: step forward from last known position (O(1) when the
+      // previous full-list group was just processed) or cycle from group 0.
+      if (!focused && fullIndex >= 0) {
         try {
-          if (lastFocusedIndex === i - 1) {
+          if (fullIndex > 0 && lastFullIndex === fullIndex - 1) {
             await vscode.commands.executeCommand('workbench.action.focusNextGroup');
           } else {
             await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
-            for (let step = 0; step < i; step++) {
+            for (let step = 0; step < fullIndex; step++) {
               await vscode.commands.executeCommand('workbench.action.focusNextGroup');
             }
           }
@@ -116,7 +124,7 @@ async function lockGroups(
       out.appendLine(`[${i}] lock failed: ${String(e)}`);
     }
 
-    lastFocusedIndex = i;
+    lastFullIndex = fullIndex;
 
     if (cleanup !== undefined) {
       try { await cleanup(); } catch { /* ignore */ }

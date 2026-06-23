@@ -3,7 +3,7 @@
   "displayName": "Lock All Editor Groups",
   "publisher": "fibber",
   "description": "Locks all or only occupied editor groups in VS Code. Grid-layout aware.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "license": "MIT",
   "repository": {
     "type": "git",
