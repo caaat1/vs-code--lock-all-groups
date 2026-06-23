@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 
-// Make a group active using its viewColumn, which works correctly in grid
-// layouts. Each branch uses the most direct API for the tab's content type.
+// Activates a group by its viewColumn — the only focus strategy that correctly
+// targets stacked groups in a grid layout.
 async function makeGroupActive(group: vscode.TabGroup): Promise<void> {
   const input = group.activeTab?.input;
   const col = group.viewColumn;
@@ -24,21 +24,15 @@ async function makeGroupActive(group: vscode.TabGroup): Promise<void> {
     return;
   }
   if (input instanceof vscode.TabInputNotebook) {
-    await vscode.commands.executeCommand(
-      "vscode.openWith",
-      input.uri,
-      input.notebookType,
-      { viewColumn: col },
-    );
+    await vscode.commands.executeCommand("vscode.openWith", input.uri, input.notebookType, {
+      viewColumn: col,
+    });
     return;
   }
   if (input instanceof vscode.TabInputCustom) {
-    await vscode.commands.executeCommand(
-      "vscode.openWith",
-      input.uri,
-      input.viewType,
-      { viewColumn: col },
-    );
+    await vscode.commands.executeCommand("vscode.openWith", input.uri, input.viewType, {
+      viewColumn: col,
+    });
     return;
   }
   throw new Error("unsupported tab type");
@@ -51,37 +45,29 @@ async function lockGroups(
   out.clear();
 
   const originalGroup = vscode.window.tabGroups.activeTabGroup;
-
-  // Snapshot once so indexOf is consistent across the loop even if the live
-  // tabGroups.all reference updates mid-run.
-  const allGroups = vscode.window.tabGroups.all;
+  const allGroups = vscode.window.tabGroups.all; // snapshot — tabGroups.all is live
 
   let locked = 0;
   let lastFullIndex = -1;
 
-  for (let i = 0; i < groups.length; i++) {
-    const group = groups[i];
-    // fullIndex is the position in the complete group list, which is what the
-    // focus commands and cycling logic need — i is just the position in the
-    // (possibly filtered) groups parameter.
-    const fullIndex = allGroups.indexOf(group);
+  for (const [i, group] of groups.entries()) {
+    const fullIndex = allGroups.indexOf(group); // position in full list, not filtered
     let focused = false;
 
     try {
       await makeGroupActive(group);
       focused = true;
     } catch (e) {
-      out.appendLine(`[${i}] col ${group.viewColumn.toString()}: ${String(e)}`);
+      out.appendLine(`[${i}] col ${group.viewColumn}: ${String(e)}`);
 
       // Fallback 1: viewColumn-based
       try {
-        await vscode.commands.executeCommand(
-          "workbench.action.focusEditorGroup",
-          { viewColumn: group.viewColumn },
-        );
+        await vscode.commands.executeCommand("workbench.action.focusEditorGroup", {
+          viewColumn: group.viewColumn,
+        });
         focused = true;
       } catch {
-        /* silent */
+        /* ignore */
       }
 
       // Fallback 2: step forward from last known position (O(1) when the
@@ -89,17 +75,11 @@ async function lockGroups(
       if (!focused && fullIndex >= 0) {
         try {
           if (fullIndex > 0 && lastFullIndex === fullIndex - 1) {
-            await vscode.commands.executeCommand(
-              "workbench.action.focusNextGroup",
-            );
+            await vscode.commands.executeCommand("workbench.action.focusNextGroup");
           } else {
-            await vscode.commands.executeCommand(
-              "workbench.action.focusFirstEditorGroup",
-            );
+            await vscode.commands.executeCommand("workbench.action.focusFirstEditorGroup");
             for (let step = 0; step < fullIndex; step++) {
-              await vscode.commands.executeCommand(
-                "workbench.action.focusNextGroup",
-              );
+              await vscode.commands.executeCommand("workbench.action.focusNextGroup");
             }
           }
           focused = true;
@@ -122,24 +102,11 @@ async function lockGroups(
   }
 
   if (locked < groups.length) {
-    out.appendLine(
-      `locked ${locked.toString()} of ${groups.length.toString()} — see above for skipped groups`,
-    );
+    out.appendLine(`locked ${locked} of ${groups.length} — see above for skipped groups`);
     out.show(true);
   }
 
-  // Restore focus to the originally active group.
-  const originalInput = originalGroup.activeTab?.input;
-  if (originalInput instanceof vscode.TabInputText) {
-    try {
-      await vscode.window.showTextDocument(originalInput.uri, {
-        viewColumn: originalGroup.viewColumn,
-        preserveFocus: false,
-      });
-    } catch {
-      /* ignore */
-    }
-  }
+  try { await makeGroupActive(originalGroup); } catch { /* ignore */ }
 
   return locked;
 }
