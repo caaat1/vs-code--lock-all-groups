@@ -14,8 +14,9 @@ const FOCUS_CMDS = [
 ];
 
 // Make a group active using its viewColumn, which works correctly in grid
-// layouts. Returns a cleanup function when a temporary document was opened
-// (empty group case) so the caller can close it after locking.
+// layouts. Each branch uses the most direct API for the tab's content type.
+// Returns a cleanup function when a temporary document was opened so the
+// caller can close it after locking.
 async function makeGroupActive(group: vscode.TabGroup): Promise<(() => Promise<void>) | undefined> {
   const input = group.activeTab?.input;
   const col = group.viewColumn;
@@ -37,10 +38,17 @@ async function makeGroupActive(group: vscode.TabGroup): Promise<(() => Promise<v
     return undefined;
   }
 
-  // Empty group: open a throwaway untitled document to activate the group,
-  // return a cleanup that closes it after locking.
+  // Empty group or unsupported tab type: open a throwaway untitled document
+  // to activate the group, verify we landed in the right place, then return
+  // a cleanup that closes it after locking.
   const doc = await vscode.workspace.openTextDocument({ content: '' });
   await vscode.window.showTextDocument(doc, { viewColumn: col, preserveFocus: false, preview: true });
+
+  if (vscode.window.tabGroups.activeTabGroup.viewColumn !== col) {
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    throw new Error(`showTextDocument landed on col ${vscode.window.tabGroups.activeTabGroup.viewColumn.toString()}, expected ${col.toString()}`);
+  }
+
   return async (): Promise<void> => {
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   };
@@ -61,23 +69,35 @@ async function lockGroups(
     try {
       cleanup = await makeGroupActive(group);
       focused = true;
-    } catch {
-      // Fallback 1: named index commands (positions 0–7, non-empty groups)
+    } catch (e) {
+      out.appendLine(`[${i}] col ${group.viewColumn.toString()}: ${String(e)}`);
+
+      // Fallback 1: named index commands (positions 0–7)
       if (i < FOCUS_CMDS.length) {
         try {
           await vscode.commands.executeCommand(FOCUS_CMDS[i]);
           focused = true;
         } catch { /* silent */ }
       }
-      // Fallback 2: viewColumn-based — covers positions ≥ 8
+      // Fallback 2: viewColumn-based
       if (!focused) {
         try {
           await vscode.commands.executeCommand('workbench.action.focusEditorGroup', { viewColumn: group.viewColumn });
           focused = true;
         } catch { /* silent */ }
       }
+      // Fallback 3: cycle from the first group via focusNextGroup — works for
+      // any position including empty groups at high column numbers.
       if (!focused) {
-        out.appendLine(`[${i}] could not focus group at col ${group.viewColumn.toString()}`);
+        try {
+          await vscode.commands.executeCommand('workbench.action.focusFirstEditorGroup');
+          for (let step = 0; step < i; step++) {
+            await vscode.commands.executeCommand('workbench.action.focusNextGroup');
+          }
+          focused = true;
+        } catch (e2) {
+          out.appendLine(`[${i}] all focus strategies failed: ${String(e2)}`);
+        }
       }
     }
 
