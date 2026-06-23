@@ -8,3 +8,4 @@ icon.svg
 _icon-gen.js
 _sync-github.js
 .gitignore
+cspell.config.yaml

@@ -1,8 +1,13 @@
 import * as vscode from "vscode";
 
 // Activates a group by its viewColumn — the only focus strategy that correctly
-// targets stacked groups in a grid layout.
-async function makeGroupActive(group: vscode.TabGroup): Promise<void> {
+// targets stacked groups in a grid layout. For empty groups, opens a throwaway
+// untitled document so that lockEditorGroup has an active editor to target;
+// returns a cleanup that closes the specific tab (not the active editor, to
+// avoid clobbering adjacent content).
+async function makeGroupActive(
+  group: vscode.TabGroup,
+): Promise<(() => Promise<void>) | undefined> {
   const input = group.activeTab?.input;
   const col = group.viewColumn;
 
@@ -11,7 +16,7 @@ async function makeGroupActive(group: vscode.TabGroup): Promise<void> {
       viewColumn: col,
       preserveFocus: false,
     });
-    return;
+    return undefined;
   }
   if (input instanceof vscode.TabInputTextDiff) {
     await vscode.commands.executeCommand(
@@ -21,21 +26,49 @@ async function makeGroupActive(group: vscode.TabGroup): Promise<void> {
       undefined,
       { viewColumn: col },
     );
-    return;
+    return undefined;
   }
   if (input instanceof vscode.TabInputNotebook) {
     await vscode.commands.executeCommand("vscode.openWith", input.uri, input.notebookType, {
       viewColumn: col,
     });
-    return;
+    return undefined;
   }
   if (input instanceof vscode.TabInputCustom) {
     await vscode.commands.executeCommand("vscode.openWith", input.uri, input.viewType, {
       viewColumn: col,
     });
-    return;
+    return undefined;
   }
-  throw new Error("unsupported tab type");
+
+  if (input !== undefined) {
+    // Non-empty but unsupported type (e.g. webview) — let fallbacks handle it.
+    throw new Error("unsupported tab type");
+  }
+
+  // Empty group: open a throwaway untitled document so lockEditorGroup has an
+  // active editor to target. Verify we landed in the right group; if not,
+  // close the stray tab and throw so the cycling fallback can take over.
+  const doc = await vscode.workspace.openTextDocument({ content: "" });
+  await vscode.window.showTextDocument(doc, {
+    viewColumn: col,
+    preserveFocus: false,
+    preview: true,
+  });
+
+  const landed = vscode.window.tabGroups.activeTabGroup;
+  if (landed.viewColumn !== col) {
+    const stray = landed.activeTab;
+    if (stray !== undefined) await vscode.window.tabGroups.close(stray);
+    throw new Error(`showTextDocument landed on col ${landed.viewColumn}, expected ${col}`);
+  }
+
+  const tab = landed.activeTab;
+  return tab !== undefined
+    ? async (): Promise<void> => {
+        await vscode.window.tabGroups.close(tab);
+      }
+    : undefined;
 }
 
 async function lockGroups(
@@ -53,9 +86,10 @@ async function lockGroups(
   for (const [i, group] of groups.entries()) {
     const fullIndex = allGroups.indexOf(group); // position in full list, not filtered
     let focused = false;
+    let cleanup: (() => Promise<void>) | undefined;
 
     try {
-      await makeGroupActive(group);
+      cleanup = await makeGroupActive(group);
       focused = true;
     } catch (e) {
       out.appendLine(`[${i}] col ${group.viewColumn}: ${String(e)}`);
@@ -99,6 +133,14 @@ async function lockGroups(
     }
 
     lastFullIndex = fullIndex;
+
+    if (cleanup !== undefined) {
+      try {
+        await cleanup();
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   if (locked < groups.length) {
@@ -106,7 +148,11 @@ async function lockGroups(
     out.show(true);
   }
 
-  try { await makeGroupActive(originalGroup); } catch { /* ignore */ }
+  try {
+    await makeGroupActive(originalGroup);
+  } catch {
+    /* ignore */
+  }
 
   return locked;
 }

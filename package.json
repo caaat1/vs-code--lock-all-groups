@@ -1,20 +1,11 @@
 {
-  "name": "lock-all-groups",
-  "displayName": "Lock All Editor Groups",
-  "publisher": "fibber",
-  "description": "Locks all or only occupied editor groups in VS Code. Grid-layout aware.",
-  "version": "0.1.6",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/caaat1/vs-code--lock-all-groups"
-  },
-  "keywords": ["editor", "group", "lock", "layout", "grid"],
-  "engines": { "vscode": "^1.72.0" },
-  "icon": "icon.png",
-  "categories": ["Other"],
-  "activationEvents": ["onCommand:lockAllGroups.lockAll", "onCommand:lockAllGroups.lockOccupied"],
-  "main": "./out/extension.js",
+  "activationEvents": [
+    "onCommand:lockAllGroups.lockAll",
+    "onCommand:lockAllGroups.lockOccupied"
+  ],
+  "categories": [
+    "Other"
+  ],
   "contributes": {
     "commands": [
       {
@@ -27,18 +18,40 @@
       }
     ]
   },
-  "scripts": {
-    "compile": "tsc -p ./",
-    "watch": "tsc --watch -p ./",
-    "generate-icon": "node _icon-gen.js",
-    "sync-github": "node _sync-github.js",
-    "package": "vsce package --out dist/",
-    "publish": "vsce publish --out dist/"
-  },
+  "description": "Locks all or only occupied editor groups in VS Code. Grid-layout aware.",
   "devDependencies": {
     "@resvg/resvg-js": "^2.0.0",
     "@types/vscode": "^1.72.0",
     "@vscode/vsce": "^3.0.0",
     "typescript": "^5.0.0"
-  }
+  },
+  "displayName": "Lock All Editor Groups",
+  "engines": {
+    "vscode": "^1.72.0"
+  },
+  "icon": "icon.png",
+  "keywords": [
+    "editor",
+    "group",
+    "lock",
+    "layout",
+    "grid"
+  ],
+  "license": "MIT",
+  "main": "./out/extension.js",
+  "name": "lock-all-groups",
+  "publisher": "fibber",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/caaat1/vs-code--lock-all-groups"
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "generate-icon": "node _icon-gen.js",
+    "package": "vsce package --out dist/",
+    "publish": "vsce publish --out dist/",
+    "sync-github": "node _sync-github.js",
+    "watch": "tsc --watch -p ./"
+  },
+  "version": "0.1.7"
 }
