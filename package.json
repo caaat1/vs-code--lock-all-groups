@@ -3,8 +3,12 @@
   "displayName": "Lock All Editor Groups",
   "publisher": "fibber",
   "description": "Locks all existing VS Code editor groups with a single command.",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/caaat1/vs-code--lock-all-groups"
+  },
   "keywords": ["editor", "group", "lock", "layout", "grid"],
   "engines": { "vscode": "^1.72.0" },
   "icon": "icon.png",
@@ -23,8 +27,8 @@
     "compile": "tsc -p ./",
     "watch": "tsc --watch -p ./",
     "generate-icon": "node _icon-gen.js",
-    "package": "vsce package --allow-missing-repository",
-    "publish": "vsce publish --allow-missing-repository"
+    "package": "vsce package",
+    "publish": "vsce publish"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.0.0",
