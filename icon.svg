@@ -1,0 +1,18 @@
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="128" height="128" rx="20" fill="#1e2030"/>
+  <!-- Panel indicators flanking the shackle (hint at 4 editor groups) -->
+  <rect x="14" y="26" width="24" height="22" rx="4" fill="#2a2d3e"/>
+  <rect x="14" y="56" width="24" height="22" rx="4" fill="#2a2d3e"/>
+  <rect x="90" y="26" width="24" height="22" rx="4" fill="#2a2d3e"/>
+  <rect x="90" y="56" width="24" height="22" rx="4" fill="#2a2d3e"/>
+  <!-- Tall shackle: long legs prevent the ear/face illusion -->
+  <path d="M 50 84 L 50 20 A 14 14 0 0 1 78 20 L 78 84"
+        fill="none" stroke="#569cd6" stroke-width="10"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Lock body -->
+  <rect x="34" y="82" width="60" height="40" rx="10" fill="#569cd6"/>
+  <!-- Keyhole: classic circle + downward triangle -->
+  <circle cx="64" cy="98" r="8" fill="#1e2030"/>
+  <polygon points="60,106 58,116 70,116 68,106" fill="#1e2030"/>
+</svg>
