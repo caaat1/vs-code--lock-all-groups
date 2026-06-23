@@ -2,7 +2,7 @@
   "name": "lock-all-groups",
   "displayName": "Lock All Editor Groups",
   "publisher": "fibber",
-  "description": "Locks all existing VS Code editor groups with a single command.",
+  "description": "Locks all or only occupied editor groups in VS Code. Grid-layout aware.",
   "version": "0.0.8",
   "license": "MIT",
   "repository": {
@@ -13,7 +13,7 @@
   "engines": { "vscode": "^1.72.0" },
   "icon": "icon.png",
   "categories": ["Other"],
-  "activationEvents": ["onCommand:lockAllGroups.lockAll"],
+  "activationEvents": ["onCommand:lockAllGroups.lockAll", "onCommand:lockAllGroups.lockOccupied"],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
@@ -31,6 +31,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc --watch -p ./",
     "generate-icon": "node _icon-gen.js",
+    "sync-github": "node _sync-github.js",
     "package": "vsce package",
     "publish": "vsce publish"
   },
