@@ -1,13 +1,9 @@
 import * as vscode from "vscode";
 
-// Activates a group by its viewColumn — the only focus strategy that correctly
-// targets stacked groups in a grid layout. For empty groups, opens a throwaway
-// untitled document so that lockEditorGroup has an active editor to target;
-// returns a cleanup that closes the specific tab (not the active editor, to
-// avoid clobbering adjacent content).
-async function makeGroupActive(
-  group: vscode.TabGroup,
-): Promise<(() => Promise<void>) | undefined> {
+// Activates a group by targeting its viewColumn directly — correct for stacked
+// groups in a grid layout. Empty groups are handled at the call site after
+// the group has been focused, so showTextDocument reliably opens there.
+async function makeGroupActive(group: vscode.TabGroup): Promise<void> {
   const input = group.activeTab?.input;
   const col = group.viewColumn;
 
@@ -16,7 +12,7 @@ async function makeGroupActive(
       viewColumn: col,
       preserveFocus: false,
     });
-    return undefined;
+    return;
   }
   if (input instanceof vscode.TabInputTextDiff) {
     await vscode.commands.executeCommand(
@@ -26,49 +22,28 @@ async function makeGroupActive(
       undefined,
       { viewColumn: col },
     );
-    return undefined;
+    return;
   }
   if (input instanceof vscode.TabInputNotebook) {
     await vscode.commands.executeCommand("vscode.openWith", input.uri, input.notebookType, {
       viewColumn: col,
     });
-    return undefined;
+    return;
   }
   if (input instanceof vscode.TabInputCustom) {
     await vscode.commands.executeCommand("vscode.openWith", input.uri, input.viewType, {
       viewColumn: col,
     });
-    return undefined;
+    return;
   }
+  throw new Error(input === undefined ? "empty group" : "unsupported tab type");
+}
 
-  if (input !== undefined) {
-    // Non-empty but unsupported type (e.g. webview) — let fallbacks handle it.
-    throw new Error("unsupported tab type");
+async function focusIndex(index: number): Promise<void> {
+  await vscode.commands.executeCommand("workbench.action.focusFirstEditorGroup");
+  for (let step = 0; step < index; step++) {
+    await vscode.commands.executeCommand("workbench.action.focusNextGroup");
   }
-
-  // Empty group: open a throwaway untitled document so lockEditorGroup has an
-  // active editor to target. Verify we landed in the right group; if not,
-  // close the stray tab and throw so the cycling fallback can take over.
-  const doc = await vscode.workspace.openTextDocument({ content: "" });
-  await vscode.window.showTextDocument(doc, {
-    viewColumn: col,
-    preserveFocus: false,
-    preview: true,
-  });
-
-  const landed = vscode.window.tabGroups.activeTabGroup;
-  if (landed.viewColumn !== col) {
-    const stray = landed.activeTab;
-    if (stray !== undefined) await vscode.window.tabGroups.close(stray);
-    throw new Error(`showTextDocument landed on col ${landed.viewColumn}, expected ${col}`);
-  }
-
-  const tab = landed.activeTab;
-  return tab !== undefined
-    ? async (): Promise<void> => {
-        await vscode.window.tabGroups.close(tab);
-      }
-    : undefined;
 }
 
 async function lockGroups(
@@ -77,8 +52,8 @@ async function lockGroups(
 ): Promise<number> {
   out.clear();
 
-  const originalGroup = vscode.window.tabGroups.activeTabGroup;
   const allGroups = vscode.window.tabGroups.all; // snapshot — tabGroups.all is live
+  const originalIndex = allGroups.indexOf(vscode.window.tabGroups.activeTabGroup);
 
   let locked = 0;
   let lastFullIndex = -1;
@@ -86,10 +61,9 @@ async function lockGroups(
   for (const [i, group] of groups.entries()) {
     const fullIndex = allGroups.indexOf(group); // position in full list, not filtered
     let focused = false;
-    let cleanup: (() => Promise<void>) | undefined;
 
     try {
-      cleanup = await makeGroupActive(group);
+      await makeGroupActive(group);
       focused = true;
     } catch (e) {
       out.appendLine(`[${i}] col ${group.viewColumn}: ${String(e)}`);
@@ -111,10 +85,7 @@ async function lockGroups(
           if (fullIndex > 0 && lastFullIndex === fullIndex - 1) {
             await vscode.commands.executeCommand("workbench.action.focusNextGroup");
           } else {
-            await vscode.commands.executeCommand("workbench.action.focusFirstEditorGroup");
-            for (let step = 0; step < fullIndex; step++) {
-              await vscode.commands.executeCommand("workbench.action.focusNextGroup");
-            }
+            await focusIndex(fullIndex);
           }
           focused = true;
         } catch (e2) {
@@ -124,6 +95,29 @@ async function lockGroups(
     }
 
     if (!focused) continue;
+
+    // Empty groups need a temporary document so lockEditorGroup has an active
+    // editor to target. The group is now the active tab group so showTextDocument
+    // reliably opens in it.
+    let cleanup: (() => Promise<void>) | undefined;
+    if (group.tabs.length === 0) {
+      try {
+        const doc = await vscode.workspace.openTextDocument({ content: "" });
+        await vscode.window.showTextDocument(doc, {
+          viewColumn: group.viewColumn,
+          preserveFocus: false,
+          preview: true,
+        });
+        const tab = vscode.window.tabGroups.activeTabGroup.activeTab;
+        if (tab !== undefined) {
+          cleanup = async (): Promise<void> => {
+            await vscode.window.tabGroups.close(tab);
+          };
+        }
+      } catch {
+        /* ignore — lockEditorGroup may still work */
+      }
+    }
 
     try {
       await vscode.commands.executeCommand("workbench.action.lockEditorGroup");
@@ -143,15 +137,25 @@ async function lockGroups(
     }
   }
 
+  const msg =
+    locked === groups.length
+      ? `Locked ${locked} editor group${locked === 1 ? "" : "s"}.`
+      : `Locked ${locked} of ${groups.length} editor groups.`;
+  vscode.window.showInformationMessage(msg);
+
   if (locked < groups.length) {
     out.appendLine(`locked ${locked} of ${groups.length} — see above for skipped groups`);
     out.show(true);
   }
 
-  try {
-    await makeGroupActive(originalGroup);
-  } catch {
-    /* ignore */
+  // Restore original focus via cycling — showTextDocument is not used here
+  // because locked groups block file opens.
+  if (originalIndex >= 0) {
+    try {
+      await focusIndex(originalIndex);
+    } catch {
+      /* ignore */
+    }
   }
 
   return locked;
