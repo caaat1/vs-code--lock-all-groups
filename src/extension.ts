@@ -14,28 +14,36 @@ const FOCUS_CMDS = [
 ];
 
 // Make a group active using its viewColumn, which works correctly in grid
-// layouts. Each branch uses the most direct API for the tab's content type.
-async function makeGroupActive(group: vscode.TabGroup): Promise<void> {
+// layouts. Returns a cleanup function when a temporary document was opened
+// (empty group case) so the caller can close it after locking.
+async function makeGroupActive(group: vscode.TabGroup): Promise<(() => Promise<void>) | undefined> {
   const input = group.activeTab?.input;
   const col = group.viewColumn;
 
   if (input instanceof vscode.TabInputText) {
     await vscode.window.showTextDocument(input.uri, { viewColumn: col, preserveFocus: false });
-    return;
+    return undefined;
   }
   if (input instanceof vscode.TabInputTextDiff) {
     await vscode.commands.executeCommand('vscode.diff', input.original, input.modified, undefined, { viewColumn: col });
-    return;
+    return undefined;
   }
   if (input instanceof vscode.TabInputNotebook) {
     await vscode.commands.executeCommand('vscode.openWith', input.uri, input.notebookType, { viewColumn: col });
-    return;
+    return undefined;
   }
   if (input instanceof vscode.TabInputCustom) {
     await vscode.commands.executeCommand('vscode.openWith', input.uri, input.viewType, { viewColumn: col });
-    return;
+    return undefined;
   }
-  throw new Error('unsupported tab type');
+
+  // Empty group: open a throwaway untitled document to activate the group,
+  // return a cleanup that closes it after locking.
+  const doc = await vscode.workspace.openTextDocument({ content: '' });
+  await vscode.window.showTextDocument(doc, { viewColumn: col, preserveFocus: false, preview: true });
+  return async (): Promise<void> => {
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+  };
 }
 
 async function lockGroups(
@@ -48,9 +56,10 @@ async function lockGroups(
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i];
     let focused = false;
+    let cleanup: (() => Promise<void>) | undefined;
 
     try {
-      await makeGroupActive(group);
+      cleanup = await makeGroupActive(group);
       focused = true;
     } catch {
       // Fallback 1: named index commands (positions 0–7, non-empty groups)
@@ -60,7 +69,7 @@ async function lockGroups(
           focused = true;
         } catch { /* silent */ }
       }
-      // Fallback 2: viewColumn-based — covers empty groups and positions ≥ 8
+      // Fallback 2: viewColumn-based — covers positions ≥ 8
       if (!focused) {
         try {
           await vscode.commands.executeCommand('workbench.action.focusEditorGroup', { viewColumn: group.viewColumn });
@@ -79,6 +88,10 @@ async function lockGroups(
       locked++;
     } catch (e) {
       out.appendLine(`[${i}] lock failed: ${String(e)}`);
+    }
+
+    if (cleanup !== undefined) {
+      try { await cleanup(); } catch { /* ignore */ }
     }
   }
 
