@@ -32,8 +32,8 @@
     "watch": "tsc --watch -p ./",
     "generate-icon": "node _icon-gen.js",
     "sync-github": "node _sync-github.js",
-    "package": "vsce package",
-    "publish": "vsce publish"
+    "package": "vsce package --out dist/",
+    "publish": "vsce publish --out dist/"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.0.0",
