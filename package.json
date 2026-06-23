@@ -3,7 +3,7 @@
   "displayName": "Lock All Editor Groups",
   "publisher": "fibber",
   "description": "Locks all existing VS Code editor groups with a single command.",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -20,6 +20,10 @@
       {
         "command": "lockAllGroups.lockAll",
         "title": "Lock All Editor Groups"
+      },
+      {
+        "command": "lockAllGroups.lockOccupied",
+        "title": "Lock Occupied Editor Groups"
       }
     ]
   },

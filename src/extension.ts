@@ -38,8 +38,10 @@ async function makeGroupActive(group: vscode.TabGroup): Promise<void> {
   throw new Error('unsupported tab type');
 }
 
-async function lockAllGroups(out: vscode.OutputChannel): Promise<number> {
-  const groups = vscode.window.tabGroups.all;
+async function lockGroups(
+  groups: readonly vscode.TabGroup[],
+  out: vscode.OutputChannel,
+): Promise<number> {
   out.clear();
 
   let locked = 0;
@@ -81,7 +83,7 @@ async function lockAllGroups(out: vscode.OutputChannel): Promise<number> {
   }
 
   if (locked < groups.length) {
-    out.appendLine(`locked ${locked} of ${groups.length} — see above for skipped groups`);
+    out.appendLine(`locked ${locked.toString()} of ${groups.length.toString()} — see above for skipped groups`);
     out.show(true);
   }
 
@@ -92,7 +94,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const out = vscode.window.createOutputChannel('Lock All Groups');
   context.subscriptions.push(
     out,
-    vscode.commands.registerCommand('lockAllGroups.lockAll', () => lockAllGroups(out)),
+    vscode.commands.registerCommand('lockAllGroups.lockAll', () =>
+      lockGroups(vscode.window.tabGroups.all, out),
+    ),
+    vscode.commands.registerCommand('lockAllGroups.lockOccupied', () =>
+      lockGroups(vscode.window.tabGroups.all.filter(g => g.tabs.length > 0), out),
+    ),
   );
 }
 

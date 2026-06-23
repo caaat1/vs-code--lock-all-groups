@@ -1,14 +1,15 @@
 # Lock All Editor Groups
 
-Locks all open editor groups in VS Code with a single command — useful for freezing a carefully arranged layout and preventing files from opening in the wrong group.
+Lock your entire editor layout with a single command — prevents files from opening in the wrong group when you have a carefully arranged workspace.
 
-## Usage
+## Commands
 
-Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run:
+Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) and run one of:
 
-**Lock All Editor Groups**
-
-Every group in your current layout is locked. Subsequent file opens will go to a new group rather than replacing tabs in your locked arrangement.
+| Command | What it does |
+|---|---|
+| **Lock All Editor Groups** | Locks every group, including empty ones |
+| **Lock Occupied Editor Groups** | Locks only groups that currently have tabs |
 
 To unlock, right-click any group's tab bar and choose **Unlock Group**, or use the built-in **Unlock Editor Group** command.
 
